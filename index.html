@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicle Movement Simulation</title>
+
+    <!-- Leaflet.js CSS and JS from a trusted CDN -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+    <!-- Google Fonts for a modern look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* General body styling */
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 1rem;
+            background-color: #f8f9fa;
+            color: #343a40;
+            min-height: 100vh;
+        }
+
+        /* Main container for the application */
+        .container {
+            width: 100%;
+            max-width: 1200px;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        
+        /* Header styling */
+        header {
+            padding: 1.5rem;
+            background-color: #007bff;
+            color: white;
+            text-align: center;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 1.75rem;
+        }
+
+        /* Main content area */
+        main {
+            padding: 1.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        /* Map container styling */
+        #map {
+            height: 500px;
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+
+        /* Panels for controls and metadata */
+        .panel {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            justify-content: space-between;
+        }
+
+        /* Individual card styling within panels */
+        .card {
+            flex: 1;
+            min-width: 280px;
+            padding: 1.5rem;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+
+        .card h2 {
+            margin-top: 0;
+            margin-bottom: 1rem;
+            font-size: 1.25rem;
+            color: #495057;
+            border-bottom: 1px solid #dee2e6;
+            padding-bottom: 0.5rem;
+        }
+
+        /* Controls styling */
+        #controls .buttons {
+            display: flex;
+            gap: 1rem;
+        }
+
+        #controls button {
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            transition: background-color 0.3s, transform 0.1s;
+        }
+
+        #playBtn { background-color: #28a745; }
+        #pauseBtn { background-color: #ffc107; }
+
+        #controls button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+
+        #controls button:not(:disabled):hover {
+            transform: translateY(-2px);
+        }
+
+        /* Metadata display styling */
+        #metadata p {
+            margin: 0.75rem 0;
+            font-size: 1rem;
+            color: #495057;
+        }
+
+        #metadata strong {
+            color: #212529;
+            min-width: 120px;
+            display: inline-block;
+        }
+
+        /* Custom vehicle icon style */
+        .vehicle-icon {
+            font-size: 24px;
+            text-shadow: 0 0 5px rgba(0,0,0,0.5);
+            transition: transform 0.2s ease-out;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Vehicle Movement Simulation 🚗</h1>
+        </header>
+        <main>
+            <div id="map"></div>
+            <div class="panel">
+                <div id="controls" class="card">
+                    <h2>Controls</h2>
+                    <div class="buttons">
+                        <button id="playBtn">▶ Play</button>
+                        <button id="pauseBtn" disabled>⏸ Pause</button>
+                    </div>
+                </div>
+                <div id="metadata" class="card">
+                    <h2>Live Metadata</h2>
+                    <p><strong>Coordinates:</strong> <span id="coords">N/A</span></p>
+                    <p><strong>Timestamp:</strong> <span id="timestamp">N/A</span></p>
+                    <p><strong>Speed:</strong> <span id="speed">N/A</span></p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+
+        // An array of objects representing points on a route.
+        // Each point has latitude, longitude, and a timestamp (in milliseconds).
+        const routeData = [
+            { lat: 30.7333, lng: 76.7794, timestamp: 1721565000000 }, 
+            { lat: 30.7325, lng: 76.7810, timestamp: 1721565015000 },
+            { lat: 30.7312, lng: 76.7835, timestamp: 1721565030000 },
+            { lat: 30.7298, lng: 76.7850, timestamp: 1721565045000 },
+            { lat: 30.7280, lng: 76.7865, timestamp: 1721565060000 },
+            { lat: 30.7265, lng: 76.7880, timestamp: 1721565075000 },
+            { lat: 30.7250, lng: 76.7895, timestamp: 1721565090000 },
+            { lat: 30.7235, lng: 76.7910, timestamp: 1721565105000 },
+            { lat: 30.7220, lng: 76.7925, timestamp: 1721565120000 },
+            { lat: 30.7205, lng: 76.7940, timestamp: 1721565135000 },
+            { lat: 30.7190, lng: 76.7955, timestamp: 1721565150000 },
+            { lat: 30.7175, lng: 76.7970, timestamp: 1721565165000 }, // Towards Mohali
+            { lat: 30.7160, lng: 76.7985, timestamp: 1721565180000 },
+            { lat: 30.7145, lng: 76.8000, timestamp: 1721565195000 },
+            { lat: 30.7130, lng: 76.7980, timestamp: 1721565210000 }, // Turn
+            { lat: 30.7115, lng: 76.7960, timestamp: 1721565225000 },
+            { lat: 30.7100, lng: 76.7940, timestamp: 1721565240000 },
+            { lat: 30.7085, lng: 76.7920, timestamp: 1721565255000 }, // Mohali End
+        ];
+
+        
+        let map;
+        let vehicleMarker;
+        let routePolyline;
+        let simulationInterval;
+        let currentIndex = 0;
+
+        // UI Elements
+        const playBtn = document.getElementById('playBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const coordsSpan = document.getElementById('coords');
+        const timestampSpan = document.getElementById('timestamp');
+        const speedSpan = document.getElementById('speed');
+
+        // Initialize the application when the window has loaded
+        window.onload = function() {
+            // Set up the map, centered on the first data point
+            const startPoint = routeData[0];
+            map = L.map('map').setView([startPoint.lat, startPoint.lng], 15);
+
+            // Add OpenStreetMap tile layer for the map background
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+
+            // Create a custom icon for the vehicle using a DivIcon
+            const vehicleIcon = L.divIcon({
+                html: '<div class="vehicle-icon">🚙</div>',
+                className: '', // No default Leaflet styles
+                iconSize: [30, 30],
+                iconAnchor: [15, 30] // Point of the icon which will correspond to marker's location
+            });
+
+            // Create the vehicle marker and add it to the map
+            vehicleMarker = L.marker([startPoint.lat, startPoint.lng], { icon: vehicleIcon }).addTo(map);
+            
+            // Extract coordinates to draw the route path
+            const routeCoords = routeData.map(point => [point.lat, point.lng]);
+            routePolyline = L.polyline(routeCoords, { color: '#007bff', weight: 5, opacity: 0.8 }).addTo(map);
+
+            // Set initial metadata display
+            updateMetadata(startPoint, 0);
+
+            // Add event listeners for control buttons
+            playBtn.addEventListener('click', playSimulation);
+            pauseBtn.addEventListener('click', pauseSimulation);
+        };
+
+    
+
+        function playSimulation() {
+            // If the simulation is at the end, restart from the beginning
+            if (currentIndex >= routeData.length - 1) {
+                currentIndex = 0;
+                vehicleMarker.setLatLng([routeData[0].lat, routeData[0].lng]);
+                map.panTo([routeData[0].lat, routeData[0].lng]);
+            }
+            
+            playBtn.disabled = true;
+            pauseBtn.disabled = false;
+
+            // Start an interval to update the position every second
+            simulationInterval = setInterval(updatePosition, 1000);
+        }
+
+        function pauseSimulation() {
+            playBtn.disabled = false;
+            pauseBtn.disabled = true;
+            clearInterval(simulationInterval);
+        }
+
+        function updatePosition() {
+            // Stop the simulation if we've reached the end of the route
+            if (currentIndex >= routeData.length - 1) {
+                pauseSimulation();
+                // We use a custom modal/alert in a real app, but alert is fine for this demo
+                // In a more complex app, you might show a message in the UI instead of an alert.
+                console.log("Route finished!");
+                return;
+            }
+
+            // Move to the next point in the data
+            currentIndex++;
+            const currentPoint = routeData[currentIndex];
+            const previousPoint = routeData[currentIndex - 1];
+
+            // Smoothly update marker position
+            vehicleMarker.setLatLng([currentPoint.lat, currentPoint.lng]);
+
+            // Pan the map to keep the vehicle in view
+            map.panTo([currentPoint.lat, currentPoint.lng]);
+
+            // Calculate speed between the last two points
+            const speed = calculateSpeed(previousPoint, currentPoint);
+            
+            // Update the metadata display on the UI
+            updateMetadata(currentPoint, speed);
+        }
+
+        /**
+         * Updates the metadata panel with the latest data.
+         * @param {object} point - The current data point {lat, lng, timestamp}.
+         * @param {number} speed - The calculated speed in km/h.
+         */
+        function updateMetadata(point, speed) {
+            coordsSpan.textContent = `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
+            timestampSpan.textContent = new Date(point.timestamp).toLocaleTimeString();
+            speedSpan.textContent = `${speed.toFixed(2)} km/h`;
+        }
+
+        /**
+         * Calculates the speed between two geographical points with timestamps.
+         * @param {object} p1 - The first point {lat, lng, timestamp}.
+         * @param {object} p2 - The second point {lat, lng, timestamp}.
+         * @returns {number} The speed in kilometers per hour.
+         */
+        function calculateSpeed(p1, p2) {
+            // Create LatLng objects for distance calculation
+            const latLng1 = L.latLng(p1.lat, p1.lng);
+            const latLng2 = L.latLng(p2.lat, p2.lng);
+
+            // Calculate distance in meters using Leaflet's built-in method
+            const distance = latLng1.distanceTo(latLng2);
+            
+            // Calculate time difference in seconds
+            const timeDiff = (p2.timestamp - p1.timestamp) / 1000;
+            
+            // Avoid division by zero if timestamps are the same
+            if (timeDiff === 0) return 0;
+
+            // Calculate speed in meters per second
+            const speedMps = distance / timeDiff;
+            
+            // Convert speed to kilometers per hour for display
+            const speedKmph = speedMps * 3.6;
+            
+            return speedKmph;
+        }
+
+    </script>
+</body>
+</html>
